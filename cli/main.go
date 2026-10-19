@@ -10,19 +10,19 @@ import (
 )
 
 func main() {
-	const dbFile = "books.json"
+	const storagePath = "books.json"
 
-	myLibrary, err := storage.LoadLibraryFromJSON(dbFile)
+	appCatalog, err := storage.ImportDataFromFile(storagePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("Файл данных не найден, создана новая библиотека.")
-			myLibrary = library.New()
+			fmt.Println("[INFO] Локальное хранилище отсутствует. Инициализирована чистая база данных.")
+			appCatalog = library.New()
 		} else {
-			log.Fatalf("Ошибка при загрузке библиотеки: %v", err)
+			log.Fatalf("[FATAL] Не удалось инициализировать приложение из файла: %v", err)
 		}
 	} else {
-		fmt.Println("Библиотека успешно загружена из файла.")
+		fmt.Println("[SUCCESS] Данные книжного фонда успешно импортированы.")
 	}
 
-	Run(myLibrary, dbFile)
+	LaunchConsoleInterface(appCatalog, storagePath)
 }

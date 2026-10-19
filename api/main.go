@@ -8,74 +8,62 @@ import (
 	"time"
 )
 
-type healthCheckResponse struct {
-	Status      string `json:"status"`
-	ProjectName string `json:"project_name"`
+type AppStatus struct {
+	State   string `json:"state"`
+	Service string `json:"service_name"`
 }
 
-type infoResponse struct {
-	Version    string `json:"version"`
-	ServerTime string `json:"server_time"`
+type SystemDetails struct {
+	BuildVersion string `json:"build_version"`
+	CurrentTime  string `json:"current_time"`
 }
 
-func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
-	response := healthCheckResponse{
-		Status:      "available",
-		ProjectName: "Library API",
-	}
-
-	jsonData, err := json.Marshal(response)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(jsonData); err != nil {
-		log.Printf("ошибка записи ответа: %v", err)
+func sendJSON(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("[ERROR] Не удалось закодировать JSON-ответ: %v", err)
 	}
 }
 
-func infoHandler(w http.ResponseWriter, r *http.Request) {
-	response := infoResponse{
-		Version:    "1.0.0",
-		ServerTime: time.Now().Format(time.RFC3339),
+func StatusController(w http.ResponseWriter, r *http.Request) {
+	payload := AppStatus{
+		State:   "running",
+		Service: "Library System Backend",
 	}
-
-	jsonData, err := json.Marshal(response)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(jsonData); err != nil {
-		log.Printf("ошибка записи ответа: %v", err)
-	}
+	sendJSON(w, http.StatusOK, payload)
 }
 
-func notFoundHandler(w http.ResponseWriter, r *http.Request) {
+func InformationController(w http.ResponseWriter, r *http.Request) {
+	payload := SystemDetails{
+		BuildVersion: "1.0.0-rc1",
+		CurrentTime:  time.Now().Format("2006-01-02 15:04:05"),
+	}
+	sendJSON(w, http.StatusOK, payload)
+}
+
+func CatchAllNotFound(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusNotFound)
-	if _, err := w.Write([]byte("This page does not exist")); err != nil {
-		log.Printf("ошибка записи ответа: %v", err)
+	if _, err := w.Write([]byte("Requested endpoint not found")); err != nil {
+		log.Printf("[WARNING] Ошибка отправки 404: %v", err)
 	}
 }
 
 func main() {
-	http.HandleFunc("/healthcheck", healthCheckHandler)
-	http.HandleFunc("/api/v1/info", infoHandler)
-	http.HandleFunc("/notfound", notFoundHandler)
+	// Маршрутизация
+	http.HandleFunc("/healthcheck", StatusController)
+	http.HandleFunc("/api/v1/info", InformationController)
+	http.HandleFunc("/notfound", CatchAllNotFound)
 
-	addr := ":8080"
-	fmt.Println("Сервер запущен на http://localhost" + addr)
-	fmt.Println("Проверка:   http://localhost" + addr + "/healthcheck")
-	fmt.Println("Информация: http://localhost" + addr + "/api/v1/info")
-	fmt.Println("404:        http://localhost" + addr + "/notfound")
+	serverPort := ":8080"
 
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		log.Fatalf("Ошибка запуска сервера: %v", err)
+	log.Printf("[INFO] Инициализация веб-сервера на порту %s...", serverPort)
+	fmt.Printf("--> Пинг-сервис:  http://localhost%s/healthcheck\n", serverPort)
+	fmt.Printf("--> Инфо-сервис:  http://localhost%s/api/v1/info\n", serverPort)
+	fmt.Printf("--> Тест 404:     http://localhost%s/notfound\n", serverPort)
+
+	if err := http.ListenAndServe(serverPort, nil); err != nil {
+		log.Fatalf("[FATAL] Критическая ошибка при работе сервера: %v", err)
 	}
 }

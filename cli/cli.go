@@ -11,102 +11,116 @@ import (
 	"library-app/storage"
 )
 
-func Run(lib *library.Library, dbPath string) {
-	reader := bufio.NewReader(os.Stdin)
+func readStringInput(scanner *bufio.Reader, prompt string) string {
+	fmt.Print(prompt)
+	text, _ := scanner.ReadString('\n')
+	return strings.TrimSpace(text)
+}
+
+func LaunchConsoleInterface(catalog *library.Library, saveFilePath string) {
+	consoleScanner := bufio.NewReader(os.Stdin)
 
 	for {
-		fmt.Println("\n=== Библиотека ===")
-		fmt.Println("1. Добавить книгу")
-		fmt.Println("2. Добавить читателя")
-		fmt.Println("3. Выдать книгу")
-		fmt.Println("4. Вернуть книгу")
-		fmt.Println("5. Показать все книги")
-		fmt.Println("6. Показать всех читателей")
-		fmt.Println("0. Выход")
-		fmt.Print("Выбор: ")
+		fmt.Println("\n--- СИСТЕМА УЧЕТА КНИГ ---")
+		fmt.Println("1) Зарегистрировать новую книгу")
+		fmt.Println("2) Добавить карточку читателя")
+		fmt.Println("3) Оформить выдачу книги")
+		fmt.Println("4) Оформить возврат книги")
+		fmt.Println("5) Вывести весь книжный фонд")
+		fmt.Println("6) Список зарегистрированных читателей")
+		fmt.Println("0) Завершить работу")
+		fmt.Print("Выберите действие: ")
 
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-		choice, err := strconv.Atoi(input)
+		var menuChoice string
+		fmt.Scanln(&menuChoice)
+		menuChoice = strings.TrimSpace(menuChoice)
+
+		commandCode, err := strconv.Atoi(menuChoice)
 		if err != nil {
-			fmt.Println("Неверный ввод, попробуйте снова.")
+			fmt.Println("Ошибка: некорректная команда. Попробуйте еще раз.")
 			continue
 		}
 
-		switch choice {
+		switch commandCode {
 		case 1:
-			fmt.Print("Название: ")
-			title, _ := reader.ReadString('\n')
-			fmt.Print("Автор: ")
-			author, _ := reader.ReadString('\n')
-			fmt.Print("Год: ")
-			yearStr, _ := reader.ReadString('\n')
-			year, err := strconv.Atoi(strings.TrimSpace(yearStr))
+			bookTitle := readStringInput(consoleScanner, "Введите название книги: ")
+			bookAuthor := readStringInput(consoleScanner, "Укажите автора: ")
+			yearRaw := readStringInput(consoleScanner, "Год издания: ")
+
+			publishYear, err := strconv.Atoi(yearRaw)
 			if err != nil {
-				fmt.Println("Неверный год.")
+				fmt.Println("Ошибка: некорректный формат года.")
 				continue
 			}
-			if _, err := lib.AddBook(strings.TrimSpace(title), strings.TrimSpace(author), year); err != nil {
-				fmt.Println("Ошибка:", err)
+
+			if _, err := catalog.RegisterBook(bookTitle, bookAuthor, publishYear); err != nil {
+				fmt.Printf("Не удалось добавить книгу: %v\n", err)
 			} else {
-				fmt.Println("Книга добавлена.")
+				fmt.Println("Успешно: книга внесена в базу данных.")
 			}
 
 		case 2:
-			fmt.Print("Имя: ")
-			first, _ := reader.ReadString('\n')
-			fmt.Print("Фамилия: ")
-			last, _ := reader.ReadString('\n')
-			if _, err := lib.AddReader(strings.TrimSpace(first), strings.TrimSpace(last)); err != nil {
-				fmt.Println("Ошибка:", err)
+			firstName := readStringInput(consoleScanner, "Имя посетителя: ")
+			lastName := readStringInput(consoleScanner, "Фамилия посетителя: ")
+
+			if _, err := catalog.RegisterReader(firstName, lastName); err != nil {
+				fmt.Printf("Не удалось зарегистрировать пользователя: %v\n", err)
 			} else {
-				fmt.Println("Читатель добавлен.")
+				fmt.Println("Успешно: карточка читателя создана.")
 			}
 
 		case 3:
-			fmt.Print("ID книги: ")
-			bStr, _ := reader.ReadString('\n')
-			fmt.Print("ID читателя: ")
-			rStr, _ := reader.ReadString('\n')
-			bookID, _ := strconv.Atoi(strings.TrimSpace(bStr))
-			readerID, _ := strconv.Atoi(strings.TrimSpace(rStr))
-			if err := lib.IssueBookToReader(bookID, readerID); err != nil {
-				fmt.Println("Ошибка:", err)
+			targetBookStr := readStringInput(consoleScanner, "Укажите ID книги: ")
+			targetReaderStr := readStringInput(consoleScanner, "Укажите ID читателя: ")
+
+			idBook, _ := strconv.Atoi(targetBookStr)
+			idReader, _ := strconv.Atoi(targetReaderStr)
+
+			if err := catalog.IssueBookToReader(idBook, idReader); err != nil {
+				fmt.Printf("Отказ в выдаче: %v\n", err)
 			} else {
-				fmt.Println("Книга выдана.")
+				fmt.Println("Успешно: книга закреплена за читателем.")
 			}
 
 		case 4:
-			fmt.Print("ID книги: ")
-			bStr, _ := reader.ReadString('\n')
-			bookID, _ := strconv.Atoi(strings.TrimSpace(bStr))
-			if err := lib.ReturnBook(bookID); err != nil {
-				fmt.Println("Ошибка:", err)
+			targetBookStr := readStringInput(consoleScanner, "Укажите ID возвращаемой книги: ")
+			idBook, _ := strconv.Atoi(targetBookStr)
+
+			if err := catalog.ReturnBook(idBook); err != nil {
+				fmt.Printf("Ошибка при возврате: %v\n", err)
 			} else {
-				fmt.Println("Книга возвращена.")
+				fmt.Println("Успешно: книга принята обратно.")
 			}
 
 		case 5:
-			fmt.Println("--- Книги ---")
-			for _, b := range lib.GetAllBooks() {
-				fmt.Println(" -", b)
+			fmt.Println("\n=== Список доступной литературы ===")
+			allBooks := catalog.GetAllBooks()
+			if len(allBooks) == 0 {
+				fmt.Println("Каталог пуст.")
+			}
+			for _, bookItem := range allBooks {
+				fmt.Printf(" • %v\n", bookItem)
 			}
 
 		case 6:
-			fmt.Println("--- Читатели ---")
-			for _, r := range lib.GetAllReaders() {
-				fmt.Println(" -", r)
+			fmt.Println("\n=== Список посетителей ===")
+			allReaders := catalog.GetAllReaders()
+			if len(allReaders) == 0 {
+				fmt.Println("Нет зарегистрированных читателей.")
+			}
+			for _, person := range allReaders {
+				fmt.Printf(" • %v\n", person)
 			}
 
 		case 0:
-			fmt.Println("Сохранение данных и выход.")
-			if err := storage.SaveLibraryToJSON(dbPath, lib); err != nil {
-				fmt.Println("Произошла ошибка сохранения списка книг:", err)
+			fmt.Println("Синхронизация локальной базы данных... Выход.")
+			if err := storage.ExportDataToFile(saveFilePath, catalog); err != nil {
+				fmt.Printf("Критическая ошибка при сохранении данных: %v\n", err)
 			}
 			return
 
 		default:
-			fmt.Println("Неизвестная команда.")
+			fmt.Println("Выбран неизвестный пункт меню. Повторите попытку.")
 		}
 	}
 }
